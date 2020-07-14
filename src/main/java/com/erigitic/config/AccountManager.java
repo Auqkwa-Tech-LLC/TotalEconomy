@@ -146,7 +146,7 @@ public class AccountManager implements EconomyService {
         for (Currency currency : getCurrencies()) {
             TECurrency teCurrency = (TECurrency) currency;
 
-            currencyCols += teCurrency.getName().toLowerCase() + "_balance decimal(19,2) NOT NULL DEFAULT '" + teCurrency.getStartingBalance() + "',";
+            currencyCols += "`" + teCurrency.getName().toLowerCase() + "_balance` decimal(19,2) NOT NULL DEFAULT '" + teCurrency.getStartingBalance() + "',";
         }
 
         sqlManager.createTable("accounts", "uid varchar(60) NOT NULL,"
@@ -358,7 +358,7 @@ public class AccountManager implements EconomyService {
             TECurrency teCurrency = (TECurrency) currency;
 
             SqlQuery.builder(sqlManager.dataSource).update("accounts")
-                    .set(teCurrency.getName().toLowerCase() + "_balance")
+                    .set("`" + teCurrency.getName().toLowerCase() + "_balance`")
                     .equals(playerAccount.getDefaultBalance(teCurrency).toString())
                     .where("uid")
                     .equals(uuid.toString())
@@ -383,7 +383,7 @@ public class AccountManager implements EconomyService {
             TECurrency teCurrency = (TECurrency) currency;
 
             SqlQuery.builder(sqlManager.dataSource).update("virtual_accounts")
-                    .set(teCurrency.getName().toLowerCase() + "_balance")
+                    .set("`" + teCurrency.getName().toLowerCase() + "_balance`")
                     .equals(virtualAccount.getDefaultBalance(teCurrency).toString())
                     .where("uid")
                     .equals(identifier)

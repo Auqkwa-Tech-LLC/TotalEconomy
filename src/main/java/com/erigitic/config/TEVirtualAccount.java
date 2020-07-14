@@ -86,7 +86,7 @@ public class TEVirtualAccount implements VirtualAccount {
 
         if (databaseActive) {
             SqlQuery sqlQuery = SqlQuery.builder(sqlManager.dataSource)
-                    .select(currencyName + "_balance")
+                    .select("`" + currencyName + "_balance`")
                     .from("virtual_accounts")
                     .where("uid")
                     .equals(identifier)
@@ -105,7 +105,7 @@ public class TEVirtualAccount implements VirtualAccount {
 
             if (databaseActive) {
                 SqlQuery sqlQuery = SqlQuery.builder(sqlManager.dataSource)
-                        .select(currencyName + "_balance")
+                        .select("`" + currencyName + "_balance`")
                         .from("virtual_accounts")
                         .where("uid")
                         .equals(identifier)
@@ -139,7 +139,7 @@ public class TEVirtualAccount implements VirtualAccount {
             if (databaseActive) {
                 SqlQuery sqlQuery = SqlQuery.builder(sqlManager.dataSource)
                         .update("virtual_accounts")
-                        .set(currencyName + "_balance")
+                        .set("`" + currencyName + "_balance`")
                         .equals(amount.setScale(2, BigDecimal.ROUND_DOWN).toPlainString())
                         .where("uid")
                         .equals(identifier)

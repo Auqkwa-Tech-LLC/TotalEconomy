@@ -107,7 +107,7 @@ public class TEAccount implements UniqueAccount {
 
         if (databaseActive) {
             SqlQuery sqlQuery = SqlQuery.builder(sqlManager.dataSource)
-                    .select(currencyName + "_balance")
+                    .select("`" + currencyName + "_balance`")
                     .from("accounts")
                     .where("uid")
                     .equals(uuid.toString())
@@ -133,7 +133,7 @@ public class TEAccount implements UniqueAccount {
 
             if (databaseActive) {
                 SqlQuery sqlQuery = SqlQuery.builder(sqlManager.dataSource)
-                        .select(currencyName + "_balance")
+                        .select("`" + currencyName + "_balance`")
                         .from("accounts")
                         .where("uid")
                         .equals(uuid.toString())
@@ -191,7 +191,7 @@ public class TEAccount implements UniqueAccount {
             if (databaseActive) {
                 SqlQuery sqlQuery = SqlQuery.builder(sqlManager.dataSource)
                         .update("accounts")
-                        .set(currencyName + "_balance")
+                        .set("`" + currencyName + "_balance`")
                         .equals(amount.setScale(2, BigDecimal.ROUND_DOWN).toPlainString())
                         .where("uid")
                         .equals(uuid.toString())

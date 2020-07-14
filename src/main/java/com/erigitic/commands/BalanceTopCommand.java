@@ -41,7 +41,6 @@ import java.util.UUID;
 
 import ninja.leaping.configurate.ConfigurationNode;
 import org.spongepowered.api.Sponge;
-import org.spongepowered.api.command.CommandException;
 import org.spongepowered.api.command.CommandResult;
 import org.spongepowered.api.command.CommandSource;
 import org.spongepowered.api.command.args.CommandContext;
@@ -49,6 +48,7 @@ import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.command.spec.CommandExecutor;
 import org.spongepowered.api.command.spec.CommandSpec;
 import org.spongepowered.api.entity.living.player.User;
+import org.spongepowered.api.scheduler.Task;
 import org.spongepowered.api.service.economy.Currency;
 import org.spongepowered.api.service.pagination.PaginationList;
 import org.spongepowered.api.service.pagination.PaginationService;
@@ -75,7 +75,7 @@ public class BalanceTopCommand implements CommandExecutor {
     }
 
     @Override
-    public CommandResult execute(CommandSource src, CommandContext args) throws CommandException {
+    public CommandResult execute(CommandSource src, CommandContext args) {
         Optional<String> optCurrency = args.<String>getOne("currency");
         Currency currency = null;
         List<Text> accountBalances = new ArrayList<>();
@@ -90,58 +90,61 @@ public class BalanceTopCommand implements CommandExecutor {
 
         final Currency fCurrency = currency;
 
-        if (TotalEconomy.getTotalEconomy().isDatabaseEnabled()) {
-            try (
-                 Connection connection = TotalEconomy.getTotalEconomy().getSqlManager().dataSource.getConnection();
-                 Statement statement = connection.createStatement()
-            ) {
-                String currencyColumn = currency.getName() + "_balance";
-                statement.execute("SELECT * FROM accounts ORDER BY `" + currencyColumn + "` DESC LIMIT 10");
+        Task.builder().execute(() -> {
+            if (TotalEconomy.getTotalEconomy().isDatabaseEnabled()) {
+                try (
+                     Connection connection = TotalEconomy.getTotalEconomy().getSqlManager().dataSource.getConnection();
+                     Statement statement = connection.createStatement()
+                ) {
+                    String currencyColumn = fCurrency.getName() + "_balance";
+                    statement.execute("SELECT * FROM accounts ORDER BY `" + currencyColumn + "` DESC LIMIT 10");
 
-                try (ResultSet set = statement.getResultSet()) {
-                    while (set.next()) {
-                        BigDecimal amount = set.getBigDecimal(currencyColumn);
-                        UUID uuid = UUID.fromString(set.getString("uid"));
-                        Optional<User> optUser = Sponge.getServiceManager().provideUnchecked(UserStorageService.class).get(uuid);
-                        String username = optUser.map(User::getName).orElse("unknown");
+                    try (ResultSet set = statement.getResultSet()) {
+                        while (set.next()) {
+                            BigDecimal amount = set.getBigDecimal(currencyColumn);
+                            UUID uuid = UUID.fromString(set.getString("uid"));
+                            Optional<User> optUser = Sponge.getServiceManager().provideUnchecked(UserStorageService.class).get(uuid);
+                            String username = optUser.map(User::getName).orElse("unknown");
 
-                        accountBalances.add(Text.of(TextColors.GRAY, username, ": ", TextColors.GOLD, currency.format(amount)));
+                            accountBalances.add(Text.of(TextColors.GRAY, username, ": ", TextColors.GOLD, fCurrency.format(amount)));
+                        }
                     }
+                } catch (SQLException e) {
+                    System.out.println("Failed to query db for ranking.");
+                    e.printStackTrace();
                 }
-            } catch (SQLException e) {
-                throw new CommandException(Text.of("Failed to query db for ranking."), e);
+            } else {
+                ConfigurationNode accountNode = TotalEconomy.getTotalEconomy().getAccountManager().getAccountConfig();
+                Map<String, BigDecimal> accountBalancesMap = new HashMap<>();
+
+                accountNode.getChildrenMap().keySet().forEach(accountUUID -> {
+                    UUID uuid;
+
+                    // Check if the account is virtual or not. If virtual, skip the rest of the execution and move on to next account.
+                    try {
+                        uuid = UUID.fromString(accountUUID.toString());
+                    } catch (IllegalArgumentException e) {
+                        return;
+                    }
+
+                    TEAccount playerAccount = (TEAccount) TotalEconomy.getTotalEconomy().getAccountManager().getOrCreateAccount(uuid).get();
+                    Text playerName = playerAccount.getDisplayName();
+
+                    accountBalancesMap.put(playerName.toPlain(), playerAccount.getBalance(fCurrency));
+                });
+
+                accountBalancesMap.entrySet().stream()
+                        .sorted(Map.Entry.<String, BigDecimal>comparingByValue().reversed())
+                        .limit(10)
+                        .forEach(entry ->
+                            accountBalances.add(Text.of(TextColors.GRAY, entry.getKey(), ": ", TextColors.GOLD, fCurrency.format(entry.getValue()).toPlain()))
+                );
             }
-        } else {
-            ConfigurationNode accountNode = TotalEconomy.getTotalEconomy().getAccountManager().getAccountConfig();
-            Map<String, BigDecimal> accountBalancesMap = new HashMap<>();
 
-            accountNode.getChildrenMap().keySet().forEach(accountUUID -> {
-                UUID uuid;
-
-                // Check if the account is virtual or not. If virtual, skip the rest of the execution and move on to next account.
-                try {
-                    uuid = UUID.fromString(accountUUID.toString());
-                } catch (IllegalArgumentException e) {
-                    return;
-                }
-
-                TEAccount playerAccount = (TEAccount) TotalEconomy.getTotalEconomy().getAccountManager().getOrCreateAccount(uuid).get();
-                Text playerName = playerAccount.getDisplayName();
-
-                accountBalancesMap.put(playerName.toPlain(), playerAccount.getBalance(fCurrency));
-            });
-
-            accountBalancesMap.entrySet().stream()
-                    .sorted(Map.Entry.<String, BigDecimal>comparingByValue().reversed())
-                    .limit(10)
-                    .forEach(entry ->
-                        accountBalances.add(Text.of(TextColors.GRAY, entry.getKey(), ": ", TextColors.GOLD, fCurrency.format(entry.getValue()).toPlain()))
-            );
-        }
-
-        builder.title(Text.of(TextColors.GOLD, "Top 10 Balances"))
-               .contents(accountBalances)
-               .sendTo(src);
+            builder.title(Text.of(TextColors.GOLD, "Top 10 Balances"))
+                   .contents(accountBalances)
+                   .sendTo(src);
+        }).async().submit(TotalEconomy.getTotalEconomy());
 
         return CommandResult.success();
     }
