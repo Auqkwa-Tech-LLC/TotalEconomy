@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import ninja.leaping.configurate.ConfigurationNode;
 import org.spongepowered.api.Sponge;
@@ -50,25 +51,22 @@ import org.spongepowered.api.command.spec.CommandSpec;
 import org.spongepowered.api.entity.living.player.User;
 import org.spongepowered.api.scheduler.Task;
 import org.spongepowered.api.service.economy.Currency;
-import org.spongepowered.api.service.pagination.PaginationList;
-import org.spongepowered.api.service.pagination.PaginationService;
 import org.spongepowered.api.service.user.UserStorageService;
 import org.spongepowered.api.text.Text;
+import org.spongepowered.api.text.action.TextActions;
 import org.spongepowered.api.text.format.TextColors;
+import org.spongepowered.api.text.format.TextFormat;
+import org.spongepowered.api.text.serializer.TextSerializers;
 
 public class BalanceTopCommand implements CommandExecutor {
-
-    private PaginationService paginationService = Sponge.getServiceManager().provideUnchecked(PaginationService.class);
-    private PaginationList.Builder builder = paginationService.builder();
 
     public static CommandSpec commandSpec() {
         return CommandSpec.builder()
                 .description(Text.of("Display top balances"))
                 .permission("totaleconomy.command.balancetop")
                 .arguments(
-                        GenericArguments.optional(
-                                GenericArguments.string(Text.of("currency"))
-                        )
+                        GenericArguments.optional(GenericArguments.integer(Text.of("page"))),
+                        GenericArguments.optional(GenericArguments.string(Text.of("currency")))
                 )
                 .executor(new BalanceTopCommand())
                 .build();
@@ -88,8 +86,20 @@ public class BalanceTopCommand implements CommandExecutor {
             currency = TotalEconomy.getTotalEconomy().getDefaultCurrency();
         }
 
+        final int rowsPerPage = 5;
         final Currency fCurrency = currency;
+        int offset = 0;
+        int pageNum = 0;
 
+        Optional<Integer> opPageNum = args.getOne(Text.of("page"));
+        if (opPageNum.isPresent()) {
+            pageNum = Math.max(0, opPageNum.get() - 1);
+            offset = pageNum * rowsPerPage;
+        }
+
+        // the changes here aren't very neat, but it'll do for now
+        int fOffset = offset;
+        int cmdPageNum = pageNum + 1;
         Task.builder().execute(() -> {
             if (TotalEconomy.getTotalEconomy().isDatabaseEnabled()) {
                 try (
@@ -97,8 +107,9 @@ public class BalanceTopCommand implements CommandExecutor {
                      Statement statement = connection.createStatement()
                 ) {
                     String currencyColumn = fCurrency.getName() + "_balance";
-                    statement.execute("SELECT * FROM accounts ORDER BY `" + currencyColumn + "` DESC LIMIT 10");
+                    statement.execute("SELECT * FROM accounts ORDER BY `" + currencyColumn + "` DESC LIMIT " + fOffset + ", " + rowsPerPage);
 
+                    AtomicInteger position = new AtomicInteger(fOffset + 1);
                     try (ResultSet set = statement.getResultSet()) {
                         while (set.next()) {
                             BigDecimal amount = set.getBigDecimal(currencyColumn);
@@ -106,7 +117,7 @@ public class BalanceTopCommand implements CommandExecutor {
                             Optional<User> optUser = Sponge.getServiceManager().provideUnchecked(UserStorageService.class).get(uuid);
                             String username = optUser.map(User::getName).orElse("unknown");
 
-                            accountBalances.add(Text.of(TextColors.GRAY, username, ": ", TextColors.GOLD, fCurrency.format(amount)));
+                            accountBalances.add(Text.of(TextColors.WHITE, position.getAndIncrement() + ". ", TextColors.GRAY, username, ": ", TextColors.GOLD, fCurrency.format(amount)));
                         }
                     }
                 } catch (SQLException e) {
@@ -133,17 +144,49 @@ public class BalanceTopCommand implements CommandExecutor {
                     accountBalancesMap.put(playerName.toPlain(), playerAccount.getBalance(fCurrency));
                 });
 
+                AtomicInteger position = new AtomicInteger(fOffset + 1);
                 accountBalancesMap.entrySet().stream()
                         .sorted(Map.Entry.<String, BigDecimal>comparingByValue().reversed())
-                        .limit(10)
+                        .limit(rowsPerPage)
                         .forEach(entry ->
-                            accountBalances.add(Text.of(TextColors.GRAY, entry.getKey(), ": ", TextColors.GOLD, fCurrency.format(entry.getValue()).toPlain()))
+                            accountBalances.add(Text.of(TextColors.WHITE, position.getAndIncrement() + ". ", TextColors.GRAY, entry.getKey(), ": ", TextColors.GOLD, fCurrency.format(entry.getValue()).toPlain()))
                 );
             }
 
-            builder.title(Text.of(TextColors.GOLD, "Top 10 Balances"))
-                   .contents(accountBalances)
-                   .sendTo(src);
+            Text.Builder backBuilder = Text.builder();
+            if (cmdPageNum > 1) {
+                backBuilder = backBuilder.append(TextSerializers.FORMATTING_CODE.deserialize("&6 \u00AB "))
+                            .onHover(TextActions.showText(TextSerializers.FORMATTING_CODE.deserialize("&a&lClick here to go to the last page")))
+                            .onClick(TextActions.runCommand("/baltop " + (cmdPageNum - 1) + " " + fCurrency.getId().replace(' ', '_')));
+            }
+            else {
+                backBuilder = backBuilder.append(TextSerializers.FORMATTING_CODE.deserialize("&7 \u00AB "));
+            }
+
+            Text.Builder fwrdBuilder = Text.builder();
+            if (accountBalances.size() == rowsPerPage) {
+                fwrdBuilder = fwrdBuilder.append(TextSerializers.FORMATTING_CODE.deserialize("&6 \u00BB "))
+                            .onHover(TextActions.showText(TextSerializers.FORMATTING_CODE.deserialize("&a&lClick here to go to the next page")))
+                            .onClick(TextActions.runCommand("/baltop " + (cmdPageNum + 1) + " " + fCurrency.getId().replace(' ', '_')));
+            }
+            else {
+                fwrdBuilder = fwrdBuilder.append(TextSerializers.FORMATTING_CODE.deserialize("&7 \u00BB "));
+            }
+
+            Text backArrow = backBuilder.build();
+            Text fwrdArrow = fwrdBuilder.build();
+
+            Text headerSeparator = TextSerializers.FORMATTING_CODE.deserialize("&7====================");
+            Text title = TextSerializers.FORMATTING_CODE.deserialize(" &6Top Balances ");
+            Text footerSeparator = TextSerializers.FORMATTING_CODE.deserialize("&7========================");
+            Text header = Text.builder().append(headerSeparator).append(title).append(headerSeparator).build();
+            Text footer = Text.builder().append(footerSeparator).append(backArrow).append(fwrdArrow).append(footerSeparator).build();
+
+            Text.Builder messageBuilder = Text.builder().append(Text.of("\n")).append(header).append(Text.of("\n"));
+            accountBalances.forEach(entry -> messageBuilder.append(entry).append(Text.of("\n")));
+            messageBuilder.append(footer);
+
+            src.sendMessage(messageBuilder.build());
         }).async().submit(TotalEconomy.getTotalEconomy());
 
         return CommandResult.success();
