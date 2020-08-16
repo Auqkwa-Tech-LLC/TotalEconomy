@@ -157,7 +157,7 @@ public class BalanceTopCommand implements CommandExecutor {
             if (cmdPageNum > 1) {
                 backBuilder = backBuilder.append(TextSerializers.FORMATTING_CODE.deserialize("&6 \u00AB "))
                             .onHover(TextActions.showText(TextSerializers.FORMATTING_CODE.deserialize("&a&lClick here to go to the last page")))
-                            .onClick(TextActions.runCommand("/baltop " + (cmdPageNum - 1) + " " + fCurrency.getId().replace(' ', '_')));
+                            .onClick(TextActions.runCommand("/baltop " + (cmdPageNum - 1) + " " + fCurrency.getName().replace(' ', '_')));
             }
             else {
                 backBuilder = backBuilder.append(TextSerializers.FORMATTING_CODE.deserialize("&7 \u00AB "));
@@ -167,7 +167,7 @@ public class BalanceTopCommand implements CommandExecutor {
             if (accountBalances.size() == rowsPerPage) {
                 fwrdBuilder = fwrdBuilder.append(TextSerializers.FORMATTING_CODE.deserialize("&6 \u00BB "))
                             .onHover(TextActions.showText(TextSerializers.FORMATTING_CODE.deserialize("&a&lClick here to go to the next page")))
-                            .onClick(TextActions.runCommand("/baltop " + (cmdPageNum + 1) + " " + fCurrency.getId().replace(' ', '_')));
+                            .onClick(TextActions.runCommand("/baltop " + (cmdPageNum + 1) + " " + fCurrency.getName().replace(' ', '_')));
             }
             else {
                 fwrdBuilder = fwrdBuilder.append(TextSerializers.FORMATTING_CODE.deserialize("&7 \u00BB "));
