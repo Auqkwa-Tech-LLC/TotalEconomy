@@ -35,6 +35,8 @@ import java.io.IOException;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import ninja.leaping.configurate.ConfigurationNode;
@@ -55,6 +57,9 @@ import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.format.TextColors;
 
 public class AccountManager implements EconomyService {
+
+    private static final ExecutorService executor = Executors.newSingleThreadExecutor();
+
     private TotalEconomy totalEconomy;
     private MessageManager messageManager;
     private Logger logger;
@@ -106,7 +111,13 @@ public class AccountManager implements EconomyService {
             accountConfig = loader.load();
 
             if (!accountsFile.exists()) {
-                loader.save(accountConfig);
+                executor.submit(() -> {
+                    try {
+                        loader.save(accountConfig);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                });
             } else {
                 if (accountConfig.getNode("version").getInt(0) != CONTENT_VERSION) {
                     accountConfig.getChildrenMap().entrySet().parallelStream().forEach(nodeEntry -> {
@@ -121,11 +132,14 @@ public class AccountManager implements EconomyService {
 
                             expNode.setValue((int) (exp + (((Math.pow(level, 2) + level) / 2) * 100 - (level * 100))));
 
-                            try {
-                                loader.save(accountConfig);
-                            } catch (IOException e) {
-                                logger.warn("Error migrating account experience values!");
-                            }
+                            executor.submit(() -> {
+                                try {
+                                    loader.save(accountConfig);
+                                } catch (IOException e) {
+                                    e.printStackTrace();
+                                    logger.warn("Error migrating account experience values!");
+                                }
+                            });
                         });
                     });
 
@@ -408,7 +422,14 @@ public class AccountManager implements EconomyService {
 
         accountConfig.getNode(uuid.toString(), "job").setValue("unemployed");
         accountConfig.getNode(uuid.toString(), "jobnotifications").setValue(totalEconomy.isJobNotificationEnabled());
-        loader.save(accountConfig);
+
+        executor.submit(() -> {
+            try {
+                loader.save(accountConfig);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        });
     }
 
     /**
@@ -426,7 +447,13 @@ public class AccountManager implements EconomyService {
             accountConfig.getNode(identifier, teCurrency.getName().toLowerCase() + "-balance").setValue(virtualAccount.getDefaultBalance(teCurrency));
         }
 
-        loader.save(accountConfig);
+        executor.submit(() -> {
+            try {
+                loader.save(accountConfig);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        });
     }
 
     /**
@@ -447,7 +474,13 @@ public class AccountManager implements EconomyService {
             }
         }
 
-        loader.save(accountConfig);
+        executor.submit(() -> {
+            try {
+                loader.save(accountConfig);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        });
     }
 
     /**
@@ -468,7 +501,13 @@ public class AccountManager implements EconomyService {
             }
         }
 
-        loader.save(accountConfig);
+        executor.submit(() -> {
+            try {
+                loader.save(accountConfig);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        });
     }
 
     /**
@@ -517,12 +556,15 @@ public class AccountManager implements EconomyService {
         } else {
             accountConfig.getNode(player.getUniqueId().toString(), "jobnotifications").setValue(jobNotifications);
 
-            try {
-                loader.save(accountConfig);
-            } catch (IOException e) {
-                player.sendMessage(Text.of(TextColors.RED, "Error toggling notifications! Try again. If this keeps showing up, notify the server owner or plugin developer."));
-                logger.warn("An error occurred while updating the notification state!");
-            }
+            executor.submit(() -> {
+                try {
+                    loader.save(accountConfig);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    player.sendMessage(Text.of(TextColors.RED, "Error toggling notifications! Try again. If this keeps showing up, notify the server owner or plugin developer."));
+                    logger.warn("An error occurred while updating the notification state!");
+                }
+            });
         }
 
         if (jobNotifications) {
@@ -569,11 +611,14 @@ public class AccountManager implements EconomyService {
      * Save the account configuration file.
      */
     public void saveConfiguration() {
-        try {
-            loader.save(accountConfig);
-        } catch (IOException e) {
-            logger.error("An error occurred while saving the account configuration file!");
-        }
+        executor.submit(() -> {
+            try {
+                loader.save(accountConfig);
+            } catch (IOException e) {
+                e.printStackTrace();
+                logger.error("An error occurred while saving the account configuration file!");
+            }
+        });
     }
 
     /**

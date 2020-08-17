@@ -32,6 +32,7 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -55,10 +56,11 @@ import org.spongepowered.api.service.user.UserStorageService;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.action.TextActions;
 import org.spongepowered.api.text.format.TextColors;
-import org.spongepowered.api.text.format.TextFormat;
 import org.spongepowered.api.text.serializer.TextSerializers;
 
 public class BalanceTopCommand implements CommandExecutor {
+
+    private static DecimalFormat formatter = new DecimalFormat("#,###.00");
 
     public static CommandSpec commandSpec() {
         return CommandSpec.builder()
@@ -117,7 +119,7 @@ public class BalanceTopCommand implements CommandExecutor {
                             Optional<User> optUser = Sponge.getServiceManager().provideUnchecked(UserStorageService.class).get(uuid);
                             String username = optUser.map(User::getName).orElse("unknown");
 
-                            accountBalances.add(Text.of(TextColors.WHITE, position.getAndIncrement() + ". ", TextColors.GRAY, username, ": ", TextColors.GOLD, fCurrency.format(amount)));
+                            accountBalances.add(Text.of(TextColors.WHITE, position.getAndIncrement() + ". ", TextColors.GRAY, username, ": ", TextColors.GOLD, fCurrency.getSymbol(), formatter.format(amount)));
                         }
                     }
                 } catch (SQLException e) {
@@ -149,7 +151,7 @@ public class BalanceTopCommand implements CommandExecutor {
                         .sorted(Map.Entry.<String, BigDecimal>comparingByValue().reversed())
                         .limit(rowsPerPage)
                         .forEach(entry ->
-                            accountBalances.add(Text.of(TextColors.WHITE, position.getAndIncrement() + ". ", TextColors.GRAY, entry.getKey(), ": ", TextColors.GOLD, fCurrency.format(entry.getValue()).toPlain()))
+                            accountBalances.add(Text.of(TextColors.WHITE, position.getAndIncrement() + ". ", TextColors.GRAY, entry.getKey(), ": ", TextColors.GOLD, fCurrency.getSymbol(), formatter.format(entry.getValue())))
                 );
             }
 
